@@ -3,7 +3,7 @@ import os
 import time
 import pickle
 import pdb
-
+import pandas as pd
 import numpy as np
 
 import torch
@@ -30,7 +30,12 @@ PRETRAINED = {
     'gl18-tl-resnet152-gem-w'           : 'http://cmp.felk.cvut.cz/cnnimageretrieval/data/networks/gl18/gl18-tl-resnet152-gem-w-21278d5.pth',
 }
 
-datasets_names = ['oxford5k', 'paris6k', 'roxford5k', 'rparis6k']
+datasets_names = ['oxford5k', 'paris6k', 'roxford5k', 'rparis6k', 'pascalvoc_70','pascalvoc_140','pascalvoc_350','pascalvoc_700','pascalvoc_1400','pascalvoc_700_no_bbx',
+                  'pascalvoc_700_train','pascalvoc_700_medium','pascalvoc_700_medium_train','pascalvoc_700_no_bbx_train',
+                     'caltech101_70','caltech101_350','caltech101_700','caltech101_1400','caltech101_700_train',
+                  'roxford5k_drift_cnn','rparis6k_drift_cnn','pascalvoc_700_drift_cnn','pascalvoc_700_medium_drift_cnn',
+                  'pascalvoc_700_no_bbx_drift_cnn','caltech101_700_drift_cnn'
+                 ]
 whitening_names = ['retrieval-SfM-30k', 'retrieval-SfM-120k']
 
 parser = argparse.ArgumentParser(description='PyTorch CNN Image Retrieval Testing')
@@ -62,6 +67,14 @@ parser.add_argument('--whitening', '-w', metavar='WHITENING', default=None, choi
 parser.add_argument('--gpu-id', '-g', default='0', metavar='N',
                     help="gpu id used for testing (default: '0')")
 
+# This is embeddings_size x num_images as per implementation so we need to swap axes.
+def generate_embedding_file(image_list, embeddings,file_path):
+    print(embeddings.shape)
+    print(len(image_list))
+    list_embedding = np.swapaxes(embeddings,0,1).tolist()
+    df = pd.DataFrame( {'image_name': image_list, 'embedding' : list_embedding})
+    df.to_csv(file_path, index=False)
+
 def main():
     args = parser.parse_args()
 
@@ -72,8 +85,10 @@ def main():
 
     # check if test dataset are downloaded
     # and download if they are not
-    download_train(get_data_root())
-    download_test(get_data_root())
+    #
+    # We do not need the train set.
+    #download_train(get_data_root())
+    #download_test(get_data_root())
 
     # setting up the visible GPU
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
@@ -223,6 +238,8 @@ def main():
 
         print('>> {}: Extracting...'.format(dataset))
 
+        print(dataset)
+        print('here it is')
         # prepare config structure for the test dataset
         cfg = configdataset(dataset, os.path.join(get_data_root(), 'test'))
         images = [cfg['im_fname'](cfg,i) for i in range(cfg['n'])]
@@ -235,19 +252,26 @@ def main():
         # extract database and query vectors
         print('>> {}: database images...'.format(dataset))
         vecs = extract_vectors(net, images, args.image_size, transform, ms=ms, msp=msp)
+
+        #generate_embedding_file(images, vecs, '/notebooks/Embeddings/CNN_Image_Retrieval/caltech101_700_train-dataset-features.csv')
+        
         print('>> {}: query images...'.format(dataset))
         qvecs = extract_vectors(net, qimages, args.image_size, transform, bbxs=bbxs, ms=ms, msp=msp)
+        #generate_embedding_file(qimages, qvecs, '/notebooks/Embeddings/CNN_Image_Retrieval/caltech101_700_train-query-features.csv')
+        
+        print('Generated Features')
         
         print('>> {}: Evaluating...'.format(dataset))
 
         # convert to numpy
         vecs = vecs.numpy()
         qvecs = qvecs.numpy()
-
+        
         # search, rank, and print
         scores = np.dot(vecs.T, qvecs)
         ranks = np.argsort(-scores, axis=0)
-        compute_map_and_print(dataset, ranks, cfg['gnd'])
+        
+        compute_map_and_print(dataset, ranks, cfg['gnd'],qimages=qimages, images=images, qvecs = qvecs , vecs = vecs, scores = scores)
     
         if Lw is not None:
             # whiten the vectors
@@ -257,7 +281,7 @@ def main():
             # search, rank, and print
             scores = np.dot(vecs_lw.T, qvecs_lw)
             ranks = np.argsort(-scores, axis=0)
-            compute_map_and_print(dataset + ' + whiten', ranks, cfg['gnd'])
+            compute_map_and_print(dataset + ' + whiten', ranks, cfg['gnd'],qimages)
         
         print('>> {}: elapsed time: {}'.format(dataset, htime(time.time()-start)))
 

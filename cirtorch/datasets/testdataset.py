@@ -1,8 +1,14 @@
 import os
 import pickle
 
-DATASETS = ['oxford5k', 'paris6k', 'roxford5k', 'rparis6k']
-
+DATASETS = [
+            'oxford5k',
+            'paris6k',
+            'roxford5k','roxford5k_drift_cnn',
+            'rparis6k','rparis6k_drift_cnn',
+            'pascalvoc_700_medium', 'pascalvoc_700_medium_train','pascalvoc_700_medium_drift_cnn',
+            'caltech101_700','caltech101_1400','caltech101_700_train','caltech101_700_drift_cnn'
+           ]
 def configdataset(dataset, dir_main):
 
     dataset = dataset.lower()

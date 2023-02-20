@@ -1,12 +1,13 @@
 import os
 import hashlib
+from pathlib import Path
 
 def get_root():
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
+    return Path(__file__).parents[6]
 
 
 def get_data_root():
-    return os.path.join(get_root(), 'data')
+    return os.path.join(get_root(), 'Datasets')
 
 
 def htime(c):

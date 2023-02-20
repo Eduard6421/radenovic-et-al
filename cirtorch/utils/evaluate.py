@@ -1,4 +1,7 @@
+
 import numpy as np
+import copy 
+import pandas as pd
 
 def compute_ap(ranks, nres):
     """
@@ -7,6 +10,7 @@ def compute_ap(ranks, nres):
     Arguments
     ---------
     ranks : zerro-based ranks of positive images
+    
     nres  : number of positive images
     
     Returns
@@ -36,7 +40,7 @@ def compute_ap(ranks, nres):
 
     return ap
 
-def compute_map(ranks, gnd, kappas=[]):
+def compute_map(ranks, gnd, kappas=[], qimages=None, images=None, qvecs=None, vecs=None, scores = None):
     """
     Computes the mAP for a given set of returned results.
 
@@ -60,6 +64,8 @@ def compute_map(ranks, gnd, kappas=[]):
     pr = np.zeros(len(kappas))
     prs = np.zeros((nq, len(kappas)))
     nempty = 0
+    
+    q_df = pd.DataFrame(columns = ['query_path','results_path','query_emb','result_emb'])
 
     for i in np.arange(nq):
         qgnd = np.array(gnd[i]['ok'])
@@ -69,6 +75,7 @@ def compute_map(ranks, gnd, kappas=[]):
             aps[i] = float('nan')
             prs[i, :] = float('nan')
             nempty += 1
+            print(f"{qimages[i]},0")
             continue
 
         try:
@@ -77,11 +84,31 @@ def compute_map(ranks, gnd, kappas=[]):
             qgndj = np.empty(0)
 
         # sorted positions of positive and junk images (0 based)
+        # sorted array of indexes which are in the positive
+        
         pos  = np.arange(ranks.shape[0])[np.in1d(ranks[:,i], qgnd)]
-        junk = np.arange(ranks.shape[0])[np.in1d(ranks[:,i], qgndj)]
+        junk = np.array([])
+        
+        current_idx = 0
+        indices = []
+        while(len(indices) < 100):
+            if(current_idx not in junk):
+                indices.append(current_idx)
+            current_idx += 1
+            
+        
+        #print(ranks[:100,i])
+        im_names  = (np.array(images))[ranks[indices,i]].tolist()
+        q_im_name = qimages[i]
+        q_im_emb  = qvecs[i]
+        im_emb    = np.swapaxes(vecs[:,ranks[indices,i]],0,1).tolist()
+        
+        res = {'query_path': q_im_name,'results_path': im_names,'query_emb': q_im_emb,'result_emb': im_emb, 'scores': scores[indices,i]} 
+        
+        q_df = pd.concat([q_df, pd.DataFrame.from_records([res])])
 
-        k = 0;
-        ij = 0;
+        k = 0
+        ij = 0
         if len(junk):
             # decrease positions of positives based on the number of
             # junk images appearing before them
@@ -103,15 +130,24 @@ def compute_map(ranks, gnd, kappas=[]):
         for j in np.arange(len(kappas)):
             kq = min(max(pos), kappas[j]); 
             prs[i, j] = (pos <= kq).sum() / kq
-        pr = pr + prs[i, :]
 
+        # Will print Average precision
+        print("AP: {},{}".format(qimages[i],ap))
+        # Will print Precision @ 100
+        #print("P@100: {},{}".format(qimages[i],prs[i,0]))    
+        
+        pr = pr + prs[i, :]
+        
     map = map / (nq - nempty)
     pr = pr / (nq - nempty)
+    
+    #q_df.to_csv('/notebooks/Embeddings/CNN_Image_Retrieval/caltech101_700_train-top-100-results-and-scores.csv', index=False)
 
     return map, aps, pr, prs
 
 
-def compute_map_and_print(dataset, ranks, gnd, kappas=[1, 5, 10]):
+def compute_map_and_print(dataset, ranks, gnd, kappas=[100], qimages=None, images=None, qvecs = None, vecs = None, scores = None):
+    
     
     # old evaluation protocol
     if dataset.startswith('oxford5k') or dataset.startswith('paris6k'):
@@ -119,31 +155,13 @@ def compute_map_and_print(dataset, ranks, gnd, kappas=[1, 5, 10]):
         print('>> {}: mAP {:.2f}'.format(dataset, np.around(map*100, decimals=2)))
 
     # new evaluation protocol
-    elif dataset.startswith('roxford5k') or dataset.startswith('rparis6k'):
+    elif dataset.startswith('roxford5k') or dataset.startswith('rparis6k') or  dataset.startswith('pascalvoc') or dataset.startswith('caltech'):
         
-        gnd_t = []
-        for i in range(len(gnd)):
-            g = {}
-            g['ok'] = np.concatenate([gnd[i]['easy']])
-            g['junk'] = np.concatenate([gnd[i]['junk'], gnd[i]['hard']])
-            gnd_t.append(g)
-        mapE, apsE, mprE, prsE = compute_map(ranks, gnd_t, kappas)
-
+        print('==================== Easy and Hard are considered Positives. Junk are considered  negatives =================')
         gnd_t = []
         for i in range(len(gnd)):
             g = {}
             g['ok'] = np.concatenate([gnd[i]['easy'], gnd[i]['hard']])
-            g['junk'] = np.concatenate([gnd[i]['junk']])
+            g['junk'] = np.array([])
             gnd_t.append(g)
-        mapM, apsM, mprM, prsM = compute_map(ranks, gnd_t, kappas)
-
-        gnd_t = []
-        for i in range(len(gnd)):
-            g = {}
-            g['ok'] = np.concatenate([gnd[i]['hard']])
-            g['junk'] = np.concatenate([gnd[i]['junk'], gnd[i]['easy']])
-            gnd_t.append(g)
-        mapH, apsH, mprH, prsH = compute_map(ranks, gnd_t, kappas)
-
-        print('>> {}: mAP E: {}, M: {}, H: {}'.format(dataset, np.around(mapE*100, decimals=2), np.around(mapM*100, decimals=2), np.around(mapH*100, decimals=2)))
-        print('>> {}: mP@k{} E: {}, M: {}, H: {}'.format(dataset, kappas, np.around(mprE*100, decimals=2), np.around(mprM*100, decimals=2), np.around(mprH*100, decimals=2)))
+        compute_map(ranks, gnd_t, kappas,qimages=copy.deepcopy(qimages), images=copy.deepcopy(images), qvecs = copy.deepcopy(qvecs), vecs = copy.deepcopy(vecs), scores = copy.deepcopy(scores))
