@@ -12,6 +12,9 @@ def download_test(data_dir):
             DATA_ROOT/test/rparis6k/  : folder with Paris images and revisited ground truth file
     """
 
+    print('here is the data dir')
+    print(data_dir)
+
     # Create data folder if it does not exist
     if not os.path.isdir(data_dir):
         os.mkdir(data_dir)
