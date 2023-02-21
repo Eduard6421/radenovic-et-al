@@ -1,7 +1,10 @@
 
+import os
 import numpy as np
 import copy 
 import pandas as pd
+
+from cirtorch.utils.general import get_results_root
 
 def compute_ap(ranks, nres):
     """
@@ -141,7 +144,8 @@ def compute_map(ranks, gnd, kappas=[], qimages=None, images=None, qvecs=None, ve
     map = map / (nq - nempty)
     pr = pr / (nq - nempty)
     
-    #q_df.to_csv('/notebooks/Embeddings/CNN_Image_Retrieval/caltech101_700_train-top-100-results-and-scores.csv', index=False)
+    top_results_path = os.path.join(get_results_root(),'{}-top-100-results-and-scores.csv', index=False)
+    q_df.to_csv(top_results_path, index=False)
 
     return map, aps, pr, prs
 

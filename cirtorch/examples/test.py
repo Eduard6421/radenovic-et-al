@@ -1,7 +1,6 @@
 import argparse
 import os
 import time
-import pickle
 import pdb
 import pandas as pd
 import numpy as np
@@ -16,7 +15,7 @@ from cirtorch.datasets.testdataset import configdataset
 from cirtorch.utils.download import download_train, download_test
 from cirtorch.utils.whiten import whitenlearn, whitenapply
 from cirtorch.utils.evaluate import compute_map_and_print
-from cirtorch.utils.general import get_data_root, htime
+from cirtorch.utils.general import get_data_root, htime, get_model_root , get_embedding_root, get_model_root, get_results_root, get_embedding_subfolder
 
 PRETRAINED = {
     'retrievalSfM120k-vgg16-gem'        : 'http://cmp.felk.cvut.cz/cnnimageretrieval/data/networks/retrieval-SfM-120k/retrievalSfM120k-vgg16-gem-b4dcdc6.pth',
@@ -90,6 +89,19 @@ def main():
     #download_train(get_data_root())
     #download_test(get_data_root())
 
+    if not os.path.exists(get_data_root()):
+        os.makedirs(get_data_root())
+
+    if not os.path.exists(get_embedding_root()):
+        os.makedirs(get_embedding_root())
+        os.makedir(get_embedding_root())
+    
+    if not os.path.exists(get_model_root()):
+        os.makedirs(get_model_root())
+    
+    if not os.path.exists(get_results_root()):
+        os.makedirs(get_results_root())
+        os.makedirs(get_embedding_subfolder())
     # setting up the visible GPU
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
 
@@ -99,7 +111,7 @@ def main():
         print(">> Loading network:\n>>>> '{}'".format(args.network_path))
         if args.network_path in PRETRAINED:
             # pretrained networks (downloaded automatically)
-            state = load_url(PRETRAINED[args.network_path], model_dir=os.path.join(get_data_root(), 'networks'))
+            state = load_url(PRETRAINED[args.network_path], model_dir=os.path.join(get_model_root(), 'networks'))
         else:
             # fine-tuned network from path
             state = torch.load(args.network_path)
@@ -241,7 +253,7 @@ def main():
         print(dataset)
         print('here it is')
         # prepare config structure for the test dataset
-        cfg = configdataset(dataset, os.path.join(get_data_root(), 'test'))
+        cfg = configdataset(dataset, get_data_root())
         images = [cfg['im_fname'](cfg,i) for i in range(cfg['n'])]
         qimages = [cfg['qim_fname'](cfg,i) for i in range(cfg['nq'])]
         try:
@@ -249,15 +261,19 @@ def main():
         except:
             bbxs = None  # for holidaysmanrot and copydays
         
-        # extract database and query vectors
+        # extract database and query vectorscl
         print('>> {}: database images...'.format(dataset))
         vecs = extract_vectors(net, images, args.image_size, transform, ms=ms, msp=msp)
 
-        #generate_embedding_file(images, vecs, '/notebooks/Embeddings/CNN_Image_Retrieval/caltech101_700_train-dataset-features.csv')
-        
+
+        dataset_embedding_path = os.path.join(get_embedding_subfolder(), "{}-dataset-features.csv")
+        generate_embedding_file(images, vecs, dataset_embedding_path)
+
+
         print('>> {}: query images...'.format(dataset))
         qvecs = extract_vectors(net, qimages, args.image_size, transform, bbxs=bbxs, ms=ms, msp=msp)
-        #generate_embedding_file(qimages, qvecs, '/notebooks/Embeddings/CNN_Image_Retrieval/caltech101_700_train-query-features.csv')
+        query_embedding_path = os.path.join(get_embedding_subfolder(), "{}-query-features.csv")
+        generate_embedding_file(qimages, qvecs, query_embedding_path)
         
         print('Generated Features')
         
